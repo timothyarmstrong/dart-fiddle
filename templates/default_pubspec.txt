@@ -1,0 +1,6 @@
+name: your-app-name
+
+dependencies:
+  browser: any
+  js:
+    hosted: js

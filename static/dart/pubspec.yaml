@@ -1,0 +1,6 @@
+name: dart-playground
+
+dependencies:
+  browser: any
+  js:
+    hosted: js

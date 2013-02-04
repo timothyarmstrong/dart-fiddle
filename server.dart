@@ -1,5 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:json' as JSON;
+
+String addslashes(String s) {
+  return s.replaceAll(r'\', r'\\').replaceAll(r'"', r'\"').replaceAll(r"'", r"\'").replaceAll(r"/", r"\\/");
+}
 
 // PATH HANDLERS
 
@@ -11,14 +16,70 @@ void handleApiCall(request, response) {
 
 // Handle requests for the application.
 void handleAppRequest(request, response) {
-  response.outputStream.writeString("App request");
-  response.outputStream.close();
+  // Get the ID.
+  var id = '';
+
+  var dartFilename, htmlFilename, pubspecFilename, iframeSource;
+  if (id.isEmpty) {
+    dartFilename = './templates/default_dart.txt';
+    htmlFilename = './templates/default_html.txt';
+    pubspecFilename = './templates/default_pubspec.txt';
+    iframeSource = '/static/special/default.html';
+  } else {
+    dartFilename = './static/files/$id/main.dart';
+    htmlFilename = './static/files/$id/index.html';
+    pubspecFilename = './static/files/$id/pubspec.yaml'; 
+    iframeSource = '/static/files/$id/';
+  }
+
+  // Fetch the files the we need.
+  Future.wait([
+    new File('./templates/app.html').readAsString(),
+    new File(dartFilename).readAsString(),
+    new File(htmlFilename).readAsString(),
+    new File(pubspecFilename).readAsString()
+  ]).then((files) {
+    var appFile = files[0];
+    var dartFile = files[1];
+    var htmlFile = files[2];
+    var pubspecFile = files[3];
+
+    // TODO: Dynamic based on actual files, which is hard because they will be stored on another fileserver.
+    // Probably will need a database holding what they are.
+    var initialData = {
+      'id': id,
+      'dart': [
+        {
+          'filename': 'main.dart',
+          'content': dartFile,
+          'type': 'Dart'
+        }
+      ],
+      'html': [
+        {
+          'filename': 'index.html',
+          'content': htmlFile,
+          'type': 'HTML'
+        },
+        {
+          'filename': 'pubspec.yaml',
+          'content': pubspecFile,
+          'type': 'YAML'
+        }
+      ]
+    };
+
+    var serialized = addslashes(JSON.stringify(initialData));
+    appFile = appFile.replaceAll(r'{{ initialData }}', serialized);
+    appFile = appFile.replaceAll(r'{{ iframeSource }}', iframeSource);
+
+    response.outputStream.writeString(appFile);
+    response.outputStream.close();
+  });
 }
 
 // Handle static file requests.
 void handleStaticFileRequest(request, response) {
-  //response.outputStream.writeString('Static handler');
-  //response.outputStream.close();
   var filetypeMap = {
     'css': 'text/css',
     'js': 'application/javascript',
@@ -28,7 +89,7 @@ void handleStaticFileRequest(request, response) {
 
   // Filter the path.
   var path = new Path('./${request.path}').canonicalize();
-  if (path.segments()[0] != 'static') {
+  if (path.segments()[0] != 'static') { // TODO: potential NPE.
     print('no longer in static');
     send404(response);
   }

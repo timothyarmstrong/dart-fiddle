@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title></title>
+    <script type="application/dart" src="main.dart"></script>
+    <script src="/dart/packages/browser/dart.js"></script>
+  </head>
+  <body>
+
+  </body>
+</html>

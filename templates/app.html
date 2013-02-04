@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Dart Fiddle</title>
+  </head>
+  <link rel="stylesheet" type="text/css" href="/static/css/css.css" />
+  <script type="application/dart" src="/static/dart/app.dart"></script>
+  <script src="/static/dart/packages/browser/dart.js"></script>
+  <script>
+    // Initial data.
+    var initialData = "{{ initialData }}";
+
+  </script>
+  <body>
+    <header>
+      <h1>Dart Playground</h1>
+      <div class="buttons">
+        <button id="run">Run</button>
+        <button id="download">Download</button>
+        <button id="save">Save</button>
+        <button id="fork">Fork</button>
+      </div>
+    </header>
+    <div id="main">
+      <section id="code-panel">
+        <div id="dart-code">
+          <!-- Filled by application -->
+        </div>
+        <div id="html-code">
+          <!-- Filled by application -->
+        </div>
+      </section>
+      <section id="result-panel">
+        <div class="tab-bar">
+          <div class="tab active">Result</div>
+        </div>
+        <div class="iframe-container">
+          <iframe src="{{ iframeSource }}"></iframe>
+        </div>
+      </section>
+    </div>
+    <script src="http://d1n0x3qji82z53.cloudfront.net/src-min-noconflict/ace.js" type="text/javascript" charset="utf-8"></script>
+    <script>
+        /*ace.config.set("workerPath", "http://d1n0x3qji82z53.cloudfront.net/src-min-noconflict/worker-javascript.js");
+
+        var dartEditor = ace.edit(document.querySelector('#dart-code .editor'));
+        //dartEditor.setTheme('http://cssdesk.com/javascripts/ace/theme/espresso.js');
+        dartEditor.getSession().setMode('ace/mode/javascript');
+        dartEditor.setHighlightActiveLine(false);
+        dartEditor.getSession().setTabSize(2);
+        dartEditor.setShowPrintMargin(false);
+
+        var htmlEditor = ace.edit(document.querySelector('#html-code .editor'));
+        //htmlEditor.setTheme('ace/theme/espresso');
+        htmlEditor.getSession().setMode('ace/mode/html');
+        htmlEditor.setHighlightActiveLine(false);
+        htmlEditor.getSession().setTabSize(2);
+        htmlEditor.setShowPrintMargin(false);*/
+    </script>
+  </body>
+</html>
