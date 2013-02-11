@@ -1,7 +1,15 @@
+library dartfiddle;
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:json' as JSON;
 import 'dart:math';
+
+part 'status_response_manager.dart';
+
+// GLOBALS
+
+var responseManager = new StatusResponseManager();
 
 // UTIL FUNCTIONS.
 
