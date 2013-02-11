@@ -206,7 +206,7 @@ main() {
 
   // Prepare the 'run' button.
   var runButton = query('#run');
-  runButton.on.click.add((e) {
+  runButton.on.click.add((e) { // TODO: use onClick.listen.
     // The data to send.
     var data = {
       'id': getId(),
