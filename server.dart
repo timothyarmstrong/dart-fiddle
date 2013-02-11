@@ -163,10 +163,10 @@ void handleAppRequest(request, response) {
     pubspecFilename = './templates/default_pubspec.txt';
     iframeSource = '/static/special/default.html';
   } else {
-    dartFilename = './static/files/$id/main.dart';
-    htmlFilename = './static/files/$id/index.html';
-    pubspecFilename = './static/files/$id/pubspec.yaml'; 
-    iframeSource = '/static/files/$id/';
+    dartFilename = './files/$id/main.dart';
+    htmlFilename = './files/$id/index.html';
+    pubspecFilename = './files/$id/pubspec.yaml'; 
+    iframeSource = '/files/$id/';
   }
 
   // Fetch the files the we need.
