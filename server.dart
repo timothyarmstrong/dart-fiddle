@@ -131,17 +131,19 @@ void handleApiCall(request, response) {
     }
 
     // TODO: dart2js compilation.
+    Process.run('./dart-sdk/bin/dart2js', ['-o./files/$id/main.dart.js', './files/$id/main.dart']).then((result) {
 
-    // TODO: Error handling for dart2js.
+      // TODO: Handle error of ProcessResult.
 
-    // Success.
-    response.headers.set(HttpHeaders.CONTENT_TYPE, 'application/json');
-    var message = {
-      'success': true,
-      'id': id
-    };
-    response.outputStream.writeString(JSON.stringify(message));
-    response.outputStream.close();
+      // Success.
+      response.headers.set(HttpHeaders.CONTENT_TYPE, 'application/json');
+      var message = {
+        'success': true,
+        'id': id
+      };
+      response.outputStream.writeString(JSON.stringify(message));
+      response.outputStream.close();
+    });
   });
 }
 
