@@ -1,14 +1,11 @@
 /**
  * This class handles the pairing of status updates with the responses waiting
- * for them. When responses come in, they are handed to this class who holds onto
- * them until there is a status update to send it back with.
+ * for them. When responses come in, they are handed to this class who holds
+ * onto them until there is a status update to send it back with.
  */
 
- // TODO: Handle time-outs so that stuff doesn't get stuck in the buffer 
- // forever.
-
-//import 'dart:io';
-//import 'dart:json' as JSON;
+ // TODO: Requests can't be held for more than 30 seconds. Make a timer running
+ // every 10 seconds, getting rid of requests 20 or more seconds old.
 
 part of dartfiddle;
 
@@ -23,7 +20,7 @@ class Status {
   // True if this step is the last step.
   bool last;
 
-  Status(this.message, this.step, this.last);
+  Status({this.message, this.step, this.last: false});
 }
 
 class StatusResponseManager {
@@ -33,7 +30,7 @@ class StatusResponseManager {
   void addResponse(HttpResponse response, String token) {
     // First check if we have a status waiting.
     if (_statuses.containsKey(token)) {
-      _sendResponse(response, _statuses[token]);
+      _sendResponse(response, _statuses[token], token);
       _statuses.remove(token);
       return;
     }
@@ -53,7 +50,8 @@ class StatusResponseManager {
       if (_responses[token].isEmpty) {
         _responses.remove(token);
       }
-      _sendResponse(response, status);
+      _sendResponse(response, status, token);
+      return;
     }
 
     // There are no responses waiting, so buffer this status. We may be
@@ -62,11 +60,12 @@ class StatusResponseManager {
     _statuses[token] = status;
   }
 
-  void _sendResponse(HttpResponse response, Status status) {
+  void _sendResponse(HttpResponse response, Status status, String token) {
     var data = {
       'status': status.message,
       'step': status.step,
-      'last': status.last
+      'last': status.last,
+      'token': token
     };
     response.headers.set(HttpHeaders.CONTENT_TYPE, 'application/json');
     response.outputStream.writeString(JSON.stringify(data));

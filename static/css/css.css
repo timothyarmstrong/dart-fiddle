@@ -96,6 +96,7 @@ header .buttons button:active {
   background: -webkit-gradient(linear, left top, left bottom, from(#ccc), to(#bbb));
   font-size: 0;
   border-bottom: 1px solid #aaa;
+  -webkit-user-select: none;
 
   display: -webkit-flex;
 }
@@ -129,6 +130,26 @@ header .buttons button:active {
 
 .tab-bar .tab:last-child {
   box-shadow: -1px 0 0 #dfdfdf, -2px 0 0 #aaa, 1px 0 0 #aaa, 2px 0 0 #d5d5d5;
+}
+
+.tab-bar .new {
+  display: inline-block;
+  height: 25px;
+  line-height: 25px;
+  font-family: 'Lucida Grande', Tahoma, sans-serif;
+  font-size: 14px;
+  font-weight: bold;
+  text-shadow: 0 1px 0 #eee;
+  background: -webkit-gradient(linear, left top, left bottom, from(#ddd), to(#ccc));
+  text-align: center;
+  box-shadow: -1px 0 0 #dfdfdf, -2px 0 0 #aaa, 1px 0 0 #aaa, 2px 0 0 #d5d5d5;
+  margin-right: 2px;
+  cursor: default;
+
+  -webkit-flex: 1;
+  max-width: 25px;
+  min-width: 25px;
+  overflow: hidden;
 }
 
 #code-panel .editors {

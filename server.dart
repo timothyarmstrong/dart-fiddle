@@ -83,13 +83,16 @@ bool isValidId(String id) {
 
 // Handle API calls.
 void handleApiCall(request, response) {
-  getFormDataJsonFromInputStream(request.inputStream).then((Map<String, String> data) {
+  getFormDataJsonFromInputStream(request.inputStream)
+      .then((Map<String, String> data) {
     // TODO: This function currently performs synchronous filesystem operations.
     // It should be moved to an isolate so that this operations don't block
     // server requests.
 
     var id = data['id'];
     var dir;
+
+    var needToRunPub = false;
 
     if (id.isEmpty) {
       do {
@@ -113,14 +116,54 @@ void handleApiCall(request, response) {
         return;
       }
 
-      // Delete all the files in this directory so that we can start fresh.
-      // This is done by delete-then-recreate.
-      // TODO: Working incrementally.
+      // Before we delete the old files, let's compare the old pubspec to the
+      // new one.
+      try {
+        // TODO: Validity.
+        var newPubspecContents = data['html'].firstMatching((fileInfo) {
+          return fileInfo['filename'] == 'pubspec.yaml';
+        })['content'];
 
-      dir.deleteSync(recursive: true);
-      dir.createSync(recursive: true);
+        var existingPubspec =
+            new File.fromPath(new Path('./files/$id/pubspec.yaml'));
+        if (existingPubspec.existsSync()) {
+          if (newPubspecContents != existingPubspec.readAsStringSync()) {
+            needToRunPub = true;
+          }
+        } else {
+          needToRunPub = true;
+        }
+      } on StateError {
+        // No pubspec submitted, for some reason. But that's fine.
+        // TODO: Should we log this? I don't really care.
+      }
+
+      // Delete all the files in this directory so that we can start fresh. I
+      // only delete direct children, not what exists in the package directory.
+
+      var files = dir.listSync();
+      for (var file in files) {
+        // Only delete files that are actual file objects, not directories.
+        if (file is File) {
+          file.deleteSync();
+        }
+      }
+
+      //dir.deleteSync(recursive: true);
+      //dir.createSync(recursive: true);
       
     }
+
+    // Now that we've established the ID, we can return this result and the rest
+    // of the updates come from status requests.
+    var token = generateRequestToken();
+    var initialResponse = {
+      'id': id,
+      'token': token
+    };
+    response.headers.set(HttpHeaders.CONTENT_TYPE, 'application/json');
+    response.outputStream.writeString(JSON.stringify(initialResponse));
+    response.outputStream.close();
 
     // We now have an empty directory that we can write into.
     // Write the input files to disk.
@@ -138,21 +181,38 @@ void handleApiCall(request, response) {
       file.writeAsStringSync(fileInfo['content']);
     }
 
-    // TODO: dart2js compilation.
-    Process.run('./dart-sdk/bin/dart2js', ['-o./files/$id/main.dart.js', './files/$id/main.dart']).then((result) {
+    // TODO: Check whether pub needs to be run.
 
-      // TODO: Handle error of ProcessResult.
+    responseManager.addStatus(
+        new Status(message: 'Running Pub...: ${needToRunPub}', step: 1), token);
 
-      // Success.
-      response.headers.set(HttpHeaders.CONTENT_TYPE, 'application/json');
-      var message = {
-        'success': true,
-        'id': id
-      };
-      response.outputStream.writeString(JSON.stringify(message));
-      response.outputStream.close();
+    var pubProcessOptions = new ProcessOptions();
+    pubProcessOptions.workingDirectory = './files/$id/';
+    Process.run('../../dart-sdk/bin/pub', ['install'], pubProcessOptions).then((result) {
+
+      // TODO: Handle pub error.
+
+      responseManager.addStatus(
+        new Status(message: 'Running dart2js...', step: 2), token);
+
+      Process.run('./dart-sdk/bin/dart2js', ['-o./files/$id/main.dart.js', './files/$id/main.dart']).then((result) {
+
+        // TODO: Handle error of ProcessResult.
+
+        responseManager.addStatus(
+            new Status(message: 'Completed', step: 3, last: true), token);
+      });
+
     });
   });
+}
+
+// Handle requests for the status of a save operation.
+void handleStatusRequest(request, response) {
+  // TODO: Validity.
+  var pathParts = request.path.split('/');
+  var token = pathParts[pathParts.length - 1];
+  responseManager.addResponse(response, token);
 }
 
 // Handle requests for the application.
@@ -164,20 +224,61 @@ void handleAppRequest(request, response) {
     id = path.segments()[0];
   }
 
-  // TODO: Ensure that this ID exists.
+  // Ensure that this ID exists.
+  if (!id.isEmpty) {
+    if (!new Directory('./files/$id.').existsSync()) {
+      response.headers.set(HttpHeaders.LOCATION, '/');
+    }
+  }
 
-  var dartFilename, htmlFilename, pubspecFilename, iframeSource;
+  var dartFiles = [];
+  var htmlFiles = [];
+  var iframeSource;
   if (id.isEmpty) {
-    dartFilename = './templates/default_dart.txt';
-    htmlFilename = './templates/default_html.txt';
-    pubspecFilename = './templates/default_pubspec.txt';
+    dartFiles.add(new File.fromPath('./templates/main.dart'));
+    htmlFiles.add(new File.fromPath('./templates/index.html'));
+    htmlFiles.add(new File.fromPath('./templates/pubspec.yaml'));
     iframeSource = '/static/special/default.html';
   } else {
-    dartFilename = './files/$id/main.dart';
-    htmlFilename = './files/$id/index.html';
-    pubspecFilename = './files/$id/pubspec.yaml'; 
+    var files = new Directory('./files/$id/').listSync();
+    // Go ahead and add main.dart in first. We can remove it later if we don't
+    // find it (this is a hack because I can't prepend to the list).
+    dartFiles.add(new File.fromPath('./$id/main.dart'));
+    bool foundMain = false;
+
+    for (var file in files) {
+      // We don't care about Directories.
+      if (file is File) {
+        if (file.name == 'main.dart') {
+          foundMain == true;
+        } else if (file.name.toLowerCase.endsWith('.dart') ||
+                   file.name.toLowerCase.endsWith('.js')) {
+          dartFiles.add(file);
+        } else if (file.name.toLowerCase.endsWith('.html') ||
+                   file.name.toLowerCase.endsWith('.yaml')) {
+          htmlFiles.add(file);
+        } else {
+          // Unrecognized file type, so let's skip it.
+          continue;
+        }
+      }
+    }
+
+    if (!foundMain) {
+      dartFilenames.removeAt(0);
+    }
+
     iframeSource = '/files/$id/';
   }
+
+  var dartCompleter = new Completer();
+  var htmlCompleter = new Completer();
+
+  for (var file in dartFiles) {}
+
+  for (var file in htmlFiles) {}
+
+  Future.wait([dartCompleter.future, htmlCompleter.future]).then(...);
 
   // Fetch the files the we need.
   Future.wait([
@@ -349,6 +450,14 @@ main() {
     }
     return false;
   }, handleApiCall);
+
+  // Setup handler for a status request.
+  server.addRequestHandler((request) {
+    if (request.path.startsWith('/api/status/') && request.method == 'GET') {
+      return true;
+    }
+    return false;
+  }, handleStatusRequest);
 
   // Setup requests for the application, either the root or including an ID.
   server.addRequestHandler((request) {

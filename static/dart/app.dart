@@ -27,10 +27,27 @@ void apiResponse(HttpRequest request) {
   }
 
   var id = data['id'];
-  var iframe = query('#result-panel iframe');
-  iframe.src = '/files/$id/';
-
   setId(id);
+
+  sendStatusRequest(data['token']);
+}
+
+void statusResponse(HttpRequest request, String token) {
+  var data = JSON.parse(request.responseText);
+  print(data['status']);
+  if (!data['last']) {
+    sendStatusRequest(token);
+  } else {
+    var iframe = query('#result-panel iframe');
+    iframe.src = '/files/${getId()}/';
+  }
+}
+
+void sendStatusRequest(String token) {
+  var request = new HttpRequest();
+  request.open('GET', '/api/status/$token');
+  request.on.loadEnd.add((e) => statusResponse(request, token));
+  request.send();
 }
 
 class _Document {
@@ -39,8 +56,9 @@ class _Document {
   var aceProxy; // TODO: What type is this?
   String filename;
   String filetype;
+  bool renamable;
 
-  _Document(this.editorElement, this.tabElement, this.aceProxy, this.filename, this.filetype);
+  _Document(this.editorElement, this.tabElement, this.aceProxy, this.filename, this.filetype, this.renamable);
 
   void makeActive() {
     editorElement.classes.add('active');
@@ -62,8 +80,7 @@ class _Document {
 }
 
 class Editor {
-  bool canCreateDocuments = true;
-  bool canRenameDocuments = true;
+  bool canCreateDocuments;
   String requiredSuffix;
 
   Element _root;
@@ -83,10 +100,10 @@ class Editor {
     'Javascript': 'ace/mode/javascript',
     'HTML': 'ace/mode/html',
     'YAML': 'ace/mode/yaml',
-    'Dart': 'ace/mode/dart'
+    'Dart': 'ace/mode/javascript'
   };
 
-  Editor(this._root) {
+  Editor(this._root, {this.canCreateDocuments: false}) {
     // Create initial editor structure.
     
     // Tab bar.
@@ -108,26 +125,77 @@ class Editor {
     if (canCreateDocuments) {
       _newButton = new DivElement();
       _newButton.classes.add('new');
-      _newButton.text = "NEW";
+      _newButton.text = "+";
       _tabBar.append(_newButton);
+
+      _newButton.onClick.listen((e) {
+        var input = askForFilename();
+        createDocument(input['filename'], '', input['filetype']);
+        switchToDocument(input['filename']);
+      });
     }
 
   }
 
-  void createDocument(String filename, String content, String filetype) {
+  // Returns the filename and filetype.
+  Map<String, String> askForFilename() {
+    // TODO: Use a better replacement for prompt
+    var filename;
+    do {
+      js.scoped(() {
+        filename = js.context.prompt('Filename?');
+      });
+    } while (filename == null || _documents.containsKey(filename));
+
+    var filetype;
+    if (filename.toLowerCase().endsWith('.dart')) {
+      filetype = 'Dart';
+    } else if (filename.toLowerCase().endsWith('.js')) {
+      filetype = 'JavaScript';
+    } else {
+      filename = '$filename.dart';
+      filetype = 'Dart';
+    }
+    return {
+      'filename': filename,
+      'filetype': filetype
+    };
+  }
+
+  void createDocument(String filename, String content, String filetype, {renamable: true}) {
     // Tab.
     var tab = new DivElement();
     tab.classes.add('tab');
     tab.text = filename;
     tab.dataAttributes['filename'] = filename;
-    _tabBar.append(tab);
+    tab.title = filename;
+    if (canCreateDocuments) {
+      _tabBar.insertBefore(tab, _tabBar.query('.new'));
+    } else {
+      _tabBar.append(tab);
+    }
 
     tab.onClick.listen((e) {
       var filename = e.currentTarget.dataAttributes['filename'];
-      _activeDocument.makeInactive();
-      _activeDocument = _documents[filename];
-      _activeDocument.makeActive();
-      _statusBar.text = _activeDocument.filetype;
+      switchToDocument(filename);
+    });
+
+    // User can rename file by double-clicking its tab.
+    tab.onDoubleClick.listen((e) {
+      var filename = e.currentTarget.dataAttributes['filename'];
+      var document = _documents[filename];
+      if (document.renamable) {
+        var input = askForFilename();
+        document.filename = input['filename'];
+        document.filetype = input['filetype'];
+        tab.text = input['filename'];
+        tab.dataAttributes['filename'] = input['filename'];
+        tab.title = input['filename'];
+        _statusBar.text = input['filetype'];
+        // Put this document back in the set of documents.
+        _documents.remove(filename);
+        _documents[input['filename']] = document;
+      }
     });
 
     // ACE editor.
@@ -139,7 +207,7 @@ class Editor {
     var aceProxy;
     js.scoped(() {
       aceProxy = js.context.ace.edit(aceElement);
-      //aceProxy.dartEditor.setTheme('ace/theme/espresso');
+      //aceProxy.setTheme('ace/theme/espresso');
       aceProxy.getSession().setMode(_filetypeToMode[filetype]);
       aceProxy.setShowPrintMargin(false);
       aceProxy.getSession().setTabSize(2);
@@ -155,7 +223,7 @@ class Editor {
     });
 
     // Bundle everything up into a _Document.
-    var document = new _Document(aceElement, tab, aceProxy, filename, filetype);
+    var document = new _Document(aceElement, tab, aceProxy, filename, filetype, renamable);
 
     if (_documents.isEmpty) {
       _activeDocument = document;
@@ -166,6 +234,14 @@ class Editor {
     // Remember this document.
     _documents[filename] = document;
 
+  }
+
+  // Changes the active tab.
+  void switchToDocument(String filename) {
+    _activeDocument.makeInactive();
+    _activeDocument = _documents[filename];
+    _activeDocument.makeActive();
+    _statusBar.text = _activeDocument.filetype;
   }
 
   List<Map<String, String>> getDocumentsContents() {
@@ -184,9 +260,6 @@ class Editor {
 }
 
 main() {
-  js.scoped(() {
-    // TODO: Move the cursor to the right place in the templates.
-  });
   
   // Grab the initial data from the JavaScript.
   var initialData;
@@ -195,13 +268,14 @@ main() {
   });
 
   // Create the editors.
-  var dartEditor = new Editor(query('#dart-code'));
+  var dartEditor = new Editor(query('#dart-code'), canCreateDocuments: true);
   for (var file in initialData['dart']) {
-    dartEditor.createDocument(file['filename'], file['content'], file['type']);
+    var renamable = file['filename'] != 'main.dart';
+    dartEditor.createDocument(file['filename'], file['content'], file['type'], renamable: renamable);
   }
   var htmlEditor = new Editor(query('#html-code'));
   for (var file in initialData['html']) {
-    htmlEditor.createDocument(file['filename'], file['content'], file['type']);
+    htmlEditor.createDocument(file['filename'], file['content'], file['type'], renamable: false);
   }
 
   // Prepare the 'run' button.
@@ -226,5 +300,25 @@ main() {
     request.send(formData);
 
     runButton.disabled = true;
+  });
+
+  // Prepare the other buttons.
+  query('#download').onClick.listen((e) {
+    var message = "Unimplemented!\n"
+"This button will allow you to download a .zip of all the files created so that"
+" you can continue working on your local machine";
+    window.alert(message);
+  });
+  query('#save').onClick.listen((e) {
+var message = "Unimplemented!\n"
+"I haven't fully decided on how this functionality will work. I like the idea of"
+" being able to snapshot different revisions, but I don't love the way that"
+" JSFiddle does it. Suggestions welcome.";
+    window.alert(message);
+  });
+  query('#fork').onClick.listen((e) {
+    var message = "Unimplemented!\n"
+"This will simply generate a new ID and leave the old one where it was.";
+    window.alert(message);
   });
 }
