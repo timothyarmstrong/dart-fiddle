@@ -46,7 +46,7 @@ void statusResponse(HttpRequest request, String token) {
 void sendStatusRequest(String token) {
   var request = new HttpRequest();
   request.open('GET', '/api/status/$token');
-  request.on.loadEnd.add((e) => statusResponse(request, token));
+  request.onLoadEnd.listen((e) => statusResponse(request, token));
   request.send();
 }
 
@@ -167,7 +167,7 @@ class Editor {
     var tab = new DivElement();
     tab.classes.add('tab');
     tab.text = filename;
-    tab.dataAttributes['filename'] = filename;
+    tab.dataset['filename'] = filename;
     tab.title = filename;
     if (canCreateDocuments) {
       _tabBar.insertBefore(tab, _tabBar.query('.new'));
@@ -176,20 +176,20 @@ class Editor {
     }
 
     tab.onClick.listen((e) {
-      var filename = e.currentTarget.dataAttributes['filename'];
+      var filename = e.currentTarget.dataset['filename'];
       switchToDocument(filename);
     });
 
     // User can rename file by double-clicking its tab.
     tab.onDoubleClick.listen((e) {
-      var filename = e.currentTarget.dataAttributes['filename'];
+      var filename = e.currentTarget.dataset['filename'];
       var document = _documents[filename];
       if (document.renamable) {
         var input = askForFilename();
         document.filename = input['filename'];
         document.filetype = input['filetype'];
         tab.text = input['filename'];
-        tab.dataAttributes['filename'] = input['filename'];
+        tab.dataset['filename'] = input['filename'];
         tab.title = input['filename'];
         _statusBar.text = input['filetype'];
         // Put this document back in the set of documents.
@@ -280,7 +280,7 @@ main() {
 
   // Prepare the 'run' button.
   var runButton = query('#run');
-  runButton.on.click.add((e) { // TODO: use onClick.listen.
+  runButton.onClick.listen((e) { // TODO: use onClick.listen.
     // The data to send.
     var data = {
       'id': getId(),
@@ -292,7 +292,7 @@ main() {
     var request = new HttpRequest();
     request.open('POST', '/api/save');
     
-    request.on.loadEnd.add((e) => apiResponse(request));
+    request.onLoadEnd.listen((e) => apiResponse(request));
 
     var formData = new FormData();
     formData.append('data', JSON.stringify(data));

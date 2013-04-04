@@ -68,7 +68,7 @@ class StatusResponseManager {
       'token': token
     };
     response.headers.set(HttpHeaders.CONTENT_TYPE, 'application/json');
-    response.outputStream.writeString(JSON.stringify(data));
-    response.outputStream.close();
+    response.write(JSON.stringify(data));
+    response.close();
   }
 }

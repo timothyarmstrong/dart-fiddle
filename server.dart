@@ -20,17 +20,16 @@ String addslashes(String s) {
           .replaceAll(r"/", r"\\/"); // Forward slashes (for some reason)
 }
 
-Future<Map<String, String>> getFormDataJsonFromInputStream(InputStream input) {
+// TODO: Fix the type this takes.
+Future<Map<String, String>> getFormDataJsonFromInputStream(Stream input) {
   var completer = new Completer();
 
   var buffer = new List<String>();
 
-  input.onData = () => buffer.add(new String.fromCharCodes(input.read()));
-
-  input.onClosed = () {
+  input.listen((data) => buffer.add(new String.fromCharCodes(data)), onDone: () {
     var fullString = buffer.join('');
     completer.complete(JSON.parse(fullString.slice(fullString.indexOf('{'), fullString.lastIndexOf('}') + 1)));
-  };
+  });
 
   // TODO: Error handling.
 
@@ -49,9 +48,9 @@ String generateId() {
 
   while (id.length < 7) {
     if (id.length % 2 == 0) {
-      id.add(consonants[random.nextInt(consonants.length - 1)]);
+      id.write(consonants[random.nextInt(consonants.length - 1)]);
     } else {
-      id.add(vowels[random.nextInt(vowels.length - 1)]);
+      id.write(vowels[random.nextInt(vowels.length - 1)]);
     }
   }
   return id.toString();
@@ -64,7 +63,7 @@ String generateRequestToken() {
   var token = new StringBuffer();
   var random = new Random();
   while (token.length < 32) {
-    token.add(random.nextInt(9));
+    token.write(random.nextInt(9));
   }
   return token.toString();
 }
@@ -82,8 +81,8 @@ bool isValidId(String id) {
 // PATH HANDLERS
 
 // Handle API calls.
-void handleApiCall(request, response) {
-  getFormDataJsonFromInputStream(request.inputStream)
+void handleApiCall(request) {
+  getFormDataJsonFromInputStream(request)
       .then((Map<String, String> data) {
     // TODO: This function currently performs synchronous filesystem operations.
     // It should be moved to an isolate so that this operations don't block
@@ -104,7 +103,7 @@ void handleApiCall(request, response) {
 
     } else {
       if (!isValidId(id)) {
-        sendApiError(response, 'Invalid ID.');
+        sendApiError(request.response, 'Invalid ID.');
         return;
       }
 
@@ -112,7 +111,7 @@ void handleApiCall(request, response) {
 
       // If the directory does not exist, then this ID does not exist.
       if (!dir.existsSync()) {
-        sendApiError(response, 'Unknown ID.');
+        sendApiError(request.response, 'Unknown ID.');
         return;
       }
 
@@ -120,7 +119,7 @@ void handleApiCall(request, response) {
       // new one.
       try {
         // TODO: Validity.
-        var newPubspecContents = data['html'].firstMatching((fileInfo) {
+        var newPubspecContents = data['html'].firstWhere((fileInfo) {
           return fileInfo['filename'] == 'pubspec.yaml';
         })['content'];
 
@@ -161,9 +160,9 @@ void handleApiCall(request, response) {
       'id': id,
       'token': token
     };
-    response.headers.set(HttpHeaders.CONTENT_TYPE, 'application/json');
-    response.outputStream.writeString(JSON.stringify(initialResponse));
-    response.outputStream.close();
+    request.response.headers.set(HttpHeaders.CONTENT_TYPE, 'application/json');
+    request.response.write(JSON.stringify(initialResponse));
+    request.response.close();
 
     // We now have an empty directory that we can write into.
     // Write the input files to disk.
@@ -208,18 +207,18 @@ void handleApiCall(request, response) {
 }
 
 // Handle requests for the status of a save operation.
-void handleStatusRequest(request, response) {
+void handleStatusRequest(request) {
   // TODO: Validity.
-  var pathParts = request.path.split('/');
+  var pathParts = request.uri.path.split('/');
   var token = pathParts[pathParts.length - 1];
-  responseManager.addResponse(response, token);
+  responseManager.addResponse(request.response, token);
 }
 
 // Handle requests for the application.
-void handleAppRequest(request, response) {
+void handleAppRequest(request) {
   // Get the ID.
   var id = '';
-  var path = new Path(request.path);
+  var path = new Path(request.uri.path);
   if (path.segments().length == 1) {
     id = path.segments()[0];
   }
@@ -227,7 +226,8 @@ void handleAppRequest(request, response) {
   // Ensure that this ID exists.
   if (!id.isEmpty) {
     if (!new Directory('./files/$id.').existsSync()) {
-      response.headers.set(HttpHeaders.LOCATION, '/');
+      request.response.headers.set(HttpHeaders.LOCATION, '/');
+      //request.response.close();
     }
   }
 
@@ -235,27 +235,31 @@ void handleAppRequest(request, response) {
   var htmlFiles = [];
   var iframeSource;
   if (id.isEmpty) {
-    dartFiles.add(new File.fromPath('./templates/main.dart'));
-    htmlFiles.add(new File.fromPath('./templates/index.html'));
-    htmlFiles.add(new File.fromPath('./templates/pubspec.yaml'));
+    dartFiles.add(new File.fromPath(new Path('./templates/main.dart')));
+    htmlFiles.add(new File.fromPath(new Path('./templates/index.html')));
+    htmlFiles.add(new File.fromPath(new Path('./templates/pubspec.yaml')));
     iframeSource = '/static/special/default.html';
   } else {
-    var files = new Directory('./files/$id/').listSync();
+    var files = new Directory('./files/$id').listSync();
     // Go ahead and add main.dart in first. We can remove it later if we don't
     // find it (this is a hack because I can't prepend to the list).
-    dartFiles.add(new File.fromPath('./$id/main.dart'));
+    dartFiles.add(new File.fromPath(new Path('./files/$id/main.dart')));
     bool foundMain = false;
 
     for (var file in files) {
       // We don't care about Directories.
       if (file is File) {
-        if (file.name == 'main.dart') {
-          foundMain == true;
-        } else if (file.name.toLowerCase.endsWith('.dart') ||
-                   file.name.toLowerCase.endsWith('.js')) {
+        var name = new Path(file.path).filename.toLowerCase();
+        if (name == 'main.dart') {
+          foundMain = true;
+        } else if (name.contains('.dart.js')) {
+          // PASS: Don't want this file because it's one of the compiled output.
+          // TODO: Probably do this more intelligently.
+        } else if (name.endsWith('.dart') ||
+                   name.endsWith('.js')) {
           dartFiles.add(file);
-        } else if (file.name.toLowerCase.endsWith('.html') ||
-                   file.name.toLowerCase.endsWith('.yaml')) {
+        } else if (name.endsWith('.html') ||
+                   name.endsWith('.yaml')) {
           htmlFiles.add(file);
         } else {
           // Unrecognized file type, so let's skip it.
@@ -265,7 +269,7 @@ void handleAppRequest(request, response) {
     }
 
     if (!foundMain) {
-      dartFilenames.removeAt(0);
+      dartFiles.removeAt(0);
     }
 
     iframeSource = '/files/$id/';
@@ -274,60 +278,81 @@ void handleAppRequest(request, response) {
   var dartCompleter = new Completer();
   var htmlCompleter = new Completer();
 
-  for (var file in dartFiles) {}
+  var dartFilesRead = Future.wait(dartFiles.map((file) {
+    return file.readAsString();
+  }));
 
-  for (var file in htmlFiles) {}
+  var htmlFilesRead = Future.wait(htmlFiles.map((file) {
+    return file.readAsString();
+  }));
 
-  Future.wait([dartCompleter.future, htmlCompleter.future]).then(...);
 
   // Fetch the files the we need.
   Future.wait([
     new File('./templates/app.html').readAsString(),
-    new File(dartFilename).readAsString(),
-    new File(htmlFilename).readAsString(),
-    new File(pubspecFilename).readAsString()
+    dartFilesRead,
+    htmlFilesRead
   ]).then((files) {
     var appFile = files[0];
-    var dartFile = files[1];
-    var htmlFile = files[2];
-    var pubspecFile = files[3];
+    var dartFileContents = files[1];
+    var htmlFileContents = files[2];
 
     // TODO: Dynamic based on actual files, which is hard because they will be stored on another fileserver.
     // Probably will need a database holding what they are.
+
     var initialData = {
       'id': id,
-      'dart': [
-        {
-          'filename': 'main.dart',
-          'content': dartFile,
-          'type': 'Dart'
-        }
-      ],
-      'html': [
-        {
-          'filename': 'index.html',
-          'content': htmlFile,
-          'type': 'HTML'
-        },
-        {
-          'filename': 'pubspec.yaml',
-          'content': pubspecFile,
-          'type': 'YAML'
-        }
-      ]
+      'dart': [],
+      'html': []
     };
 
+    // TODO: This logic is kinda brittle. I hate pulling things out of the same
+    // position from different arrays and mashing them together.
+
+    for (int i = 0; i < dartFiles.length; i++) {
+      var filename = new Path(dartFiles[i].path).filename;
+      var content = dartFileContents[i];
+      var type = 'Text';
+      if (filename.endsWith('.js')) {
+        type = 'JavaScript';
+      } else if (filename.endsWith('.dart')) {
+        type = 'Dart';
+      }
+      initialData['dart'].add({
+        'filename': filename,
+        'content': content,
+        'type': type
+      });
+    }
+
+    for (int i = 0; i < htmlFiles.length; i++) {
+      var filename = new Path(htmlFiles[i].path).filename;
+      var content = htmlFileContents[i];
+      var type = 'Text';
+      if (filename.endsWith('.html')) {
+        type = 'HTML';
+      } else if (filename.endsWith('.yaml')) {
+        type = 'YAML';
+      }
+      initialData['html'].add({
+        'filename': filename,
+        'content': content,
+        'type': type
+      });
+    }
+
+    // Put the initial data JSON into a JavaScript variable in the page.
     var serialized = addslashes(JSON.stringify(initialData));
     appFile = appFile.replaceAll(r'{{ initialData }}', serialized);
     appFile = appFile.replaceAll(r'{{ iframeSource }}', iframeSource);
 
-    response.outputStream.writeString(appFile);
-    response.outputStream.close();
+    request.response.write(appFile);
+    request.response.close();
   });
 }
 
 // Handle static file requests.
-void handleStaticFileRequest(request, response) {
+void handleStaticFileRequest(request) {
   var filetypeMap = {
     'css': 'text/css',
     'js': 'application/javascript',
@@ -336,29 +361,29 @@ void handleStaticFileRequest(request, response) {
   };
 
   // Filter the path.
-  var path = new Path('./${request.path}').canonicalize();
+  var path = new Path('./${request.uri.path}').canonicalize();
   if (path.segments()[0] != 'static') { // TODO: potential NPE. // TODO: What if there is a dir higher up named static?
     print('no longer in static');
-    send404(response);
+    send404(request);
   }
   // Send the file, if it exists.
   var file = new File.fromPath(path);
   file.exists().then((bool exists) {
     if (exists) {
       if (filetypeMap.containsKey(path.extension)) {
-        response.headers.set(HttpHeaders.CONTENT_TYPE, filetypeMap[path.extension]);
+        request.response.headers.set(HttpHeaders.CONTENT_TYPE, filetypeMap[path.extension]);
       }
-      file.openInputStream().pipe(response.outputStream);
+      file.openRead().pipe(request.response);
     } else {
       print('file does not exist');
-      send404(response);
+      send404(request);
     }
   });
 }
 
 // Handle requests for created files. This is currently a copy-paste of above.
 // TODO: This will change or be removed once we change were files are kept.
-void handleFileRequest(request, response) {
+void handleFileRequest(request) {
   var filetypeMap = {
     'css': 'text/css',
     'js': 'application/javascript',
@@ -367,10 +392,10 @@ void handleFileRequest(request, response) {
   };
 
   // Filter the path.
-  var path = new Path('./${request.path}').canonicalize();
+  var path = new Path('./${request.uri.path}').canonicalize();
   if (path.segments()[0] != 'files') { // TODO: potential NPE. // TODO: What if there is a dir higher up named static?
     print('no longer in files');
-    send404(response);
+    send404(request);
   }
   // Send the file, if it exists.
   // TODO: Clean up this nastiness.
@@ -378,21 +403,23 @@ void handleFileRequest(request, response) {
   file.exists().then((bool exists) {
     if (exists) {
       if (filetypeMap.containsKey(path.extension)) {
-        response.headers.set(HttpHeaders.CONTENT_TYPE, filetypeMap[path.extension]);
+        request.response.headers.set(
+            HttpHeaders.CONTENT_TYPE, filetypeMap[path.extension]);
       }
-      file.openInputStream().pipe(response.outputStream);
+      file.openRead().pipe(request.response);
     } else {
       // It might be a directory, so try serving its index.
       file = new File.fromPath(new Path('$path/index.html'));
       file.exists().then((bool exists) {
         if (exists) {
           if (filetypeMap.containsKey(path.extension)) {
-            response.headers.set(HttpHeaders.CONTENT_TYPE, filetypeMap['html']);
+            request.response.headers.set(
+                HttpHeaders.CONTENT_TYPE, filetypeMap['html']);
           }
-          file.openInputStream().pipe(response.outputStream);
+          file.openRead().pipe(request.response);
         } else {
           print('file does not exist');
-          send404(response);
+          send404(request);
         }
       });
     }
@@ -402,11 +429,12 @@ void handleFileRequest(request, response) {
 // ERROR HANDLING
 
 // Normal 404 response.
-void send404(response) {
+void send404(request) {
+  print('404: ${request.method}: ${request.uri.path}');
   // TODO: 404 code.
-  response.statusCode = HttpStatus.NOT_FOUND;
-  response.outputStream.writeString("404'd");
-  response.outputStream.close();
+  request.response.statusCode = HttpStatus.NOT_FOUND;
+  request.response.write("404'd");
+  request.response.close();
 }
 
 // API Error
@@ -417,68 +445,38 @@ void sendApiError(response, [message = 'An error occurred.']) {
   var message = {
     'error': message
   };
-  response.outputStream.writeString(JSON.stringify(message));
-  response.outputStream.close();
+  response.write(JSON.stringify(message));
+  response.close();
 }
 
 main() {
-  var server = new HttpServer();
-  var port = int.parse(Platform.environment['PORT']);
-  server.listen('0.0.0.0', port);
-  print('Server started on port: ${port}');
+  var port = Platform.environment['PORT'] != null ?
+               int.parse(Platform.environment['PORT']) : 3000;
 
-  // Setup static request handler.
-  server.addRequestHandler((request) {
-    if (request.path.startsWith('/static/') && request.method == 'GET') {
-      return true;
-    }
-    return false;
-  }, handleStaticFileRequest);
-
-  // Setup handler for the created files.
-  server.addRequestHandler((request) {
-    if (request.path.startsWith('/files/') && request.method == 'GET') {
-      return true;
-    }
-    return false;
-  }, handleFileRequest);
-
-  // Setup API request handler.
-  server.addRequestHandler((request) {
-    if (request.path == '/api/save' && request.method == 'POST') {
-      return true;
-    }
-    return false;
-  }, handleApiCall);
-
-  // Setup handler for a status request.
-  server.addRequestHandler((request) {
-    if (request.path.startsWith('/api/status/') && request.method == 'GET') {
-      return true;
-    }
-    return false;
-  }, handleStatusRequest);
-
-  // Setup requests for the application, either the root or including an ID.
-  server.addRequestHandler((request) {
-    var segments = new Path(request.path).segments();
-    if (segments.length == 0 || (segments.length == 1 && new RegExp(r'^[a-z]{7}$').hasMatch(segments[0]))) {
-      return true;
-    }
-    return false;
-  }, handleAppRequest);
-
-  // Handle all other requests.
-  server.defaultRequestHandler = (HttpRequest request, HttpResponse response) {
-    if (request.path == '/favicon.ico') {
-      // TODO: Handle favicon request.
-      print('This is a favicon request.');
-    }
-
-    send404(response);
-
-    /* response.headers.set(HttpHeaders.CONTENT_TYPE, 'text/html');
-    response.outputStream.writeString('Default request handler');
-    response.outputStream.close(); */
-  };
+  HttpServer.bind('0.0.0.0', port).then((HttpServer server) {
+    print('Server started on port: ${port}');
+    server.listen((HttpRequest request) {
+      // Perform routing.
+      // TODO: Use a routing library?
+      var segments = new Path(request.uri.path).segments();
+      if (request.uri.path.startsWith('/static/') && request.method == 'GET') {
+        handleStaticFileRequest(request);
+      } else if (request.uri.path.startsWith('/files/') &&
+                 request.method == 'GET') {
+        handleFileRequest(request);
+      } else if (request.uri.path == '/api/save' && request.method == 'POST') {
+        handleApiCall(request);
+      } else if (request.uri.path.startsWith('/api/status/') &&
+                 request.method == 'GET') {
+        handleStatusRequest(request);
+      } else if (segments.length == 0 || (segments.length === 1 &&
+                 new RegExp(r'^[a-z]{7}$').hasMatch(segments[0]))) {
+        // Requests for the application, either the root or including an ID.
+        handleAppRequest(request);
+      } else {
+        // Default request handler.
+        send404(request);
+      }
+    });
+  });
 }
