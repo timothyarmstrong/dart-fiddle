@@ -101,6 +101,10 @@ void handleApiCall(request) {
 
       dir.createSync(recursive: true);
 
+      // TODO: Copy over the default pub installation instead of having to run
+      // pub on first run.
+      needToRunPub = true;
+
     } else {
       if (!isValidId(id)) {
         sendApiError(request.response, 'Invalid ID.');
@@ -180,29 +184,30 @@ void handleApiCall(request) {
       file.writeAsStringSync(fileInfo['content']);
     }
 
-    // TODO: Check whether pub needs to be run.
+    // This function runs Pub if necessary, returning a future either way.
+    Future maybeRunPub() {
+      if (needToRunPub) {
+        responseManager.addStatus(
+            new Status(message: 'Running Pub...', step: 1), token);
+        var pubProcessOptions = new ProcessOptions();
+        pubProcessOptions.workingDirectory = './files/$id/';
+        return Process.run('../../dart-sdk/bin/pub', ['install'], pubProcessOptions);
+      }
+      return new Future.immediate(null);
+    }
 
-    responseManager.addStatus(
-        new Status(message: 'Running Pub...: ${needToRunPub}', step: 1), token);
-
-    var pubProcessOptions = new ProcessOptions();
-    pubProcessOptions.workingDirectory = './files/$id/';
-    Process.run('../../dart-sdk/bin/pub', ['install'], pubProcessOptions).then((result) {
-
-      // TODO: Handle pub error.
-
-      responseManager.addStatus(
-        new Status(message: 'Running dart2js...', step: 2), token);
-
-      Process.run('./dart-sdk/bin/dart2js', ['-o./files/$id/main.dart.js', './files/$id/main.dart']).then((result) {
-
-        // TODO: Handle error of ProcessResult.
-
+    // TODO: Handle Pub or dart2js errors.
+    maybeRunPub()
+      .then((_) {
+        responseManager.addStatus(
+            new Status(message: 'Running dart2js...', step: 2), token);
+        return new Future.immediate(null);
+      })
+      .then((_) => Process.run('./dart-sdk/bin/dart2js', ['-o./files/$id/main.dart.js', './files/$id/main.dart']))
+      .then((_) {
         responseManager.addStatus(
             new Status(message: 'Completed', step: 3, last: true), token);
       });
-
-    });
   });
 }
 

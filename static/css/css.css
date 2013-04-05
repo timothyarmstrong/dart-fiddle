@@ -221,3 +221,21 @@ header .buttons button:active {
   height: 100%;
   border: none;
 }
+
+#result-panel .status-monitor {
+  position: absolute;
+  background: black;
+  opacity: 0.8;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: none;
+  color: yellow;
+  font-family: monospace;
+  padding: 15px;
+}
+
+#result-panel .status-monitor.active {
+  display: block;
+}

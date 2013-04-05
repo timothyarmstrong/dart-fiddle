@@ -34,10 +34,15 @@ void apiResponse(HttpRequest request) {
 
 void statusResponse(HttpRequest request, String token) {
   var data = JSON.parse(request.responseText);
-  print(data['status']);
+  //print(data['status']);
+  var statusLine = new DivElement();
+  statusLine.text = data['status'];
+  var statusMonitor = query('#result-panel .status-monitor');
+  statusMonitor.append(statusLine);
   if (!data['last']) {
     sendStatusRequest(token);
   } else {
+    statusMonitor.classes.remove('active');
     var iframe = query('#result-panel iframe');
     iframe.src = '/files/${getId()}/';
   }
@@ -300,6 +305,10 @@ main() {
     request.send(formData);
 
     runButton.disabled = true;
+
+    var statusMonitor = query('#result-panel .status-monitor');
+    statusMonitor.children.clear();
+    statusMonitor.classes.add('active');
   });
 
   // Prepare the other buttons.
