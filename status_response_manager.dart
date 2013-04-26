@@ -17,10 +17,14 @@ class Status {
   // sure that it doesn't display out-of-order statuses.
   int step;
 
+  // True if everything is ready for Dartium to run the application (but dart2js
+  // might not have been run yet).
+  bool dartiumDone;
+
   // True if this step is the last step.
   bool last;
 
-  Status({this.message, this.step, this.last: false});
+  Status({this.message, this.step, this.dartiumDone: false, this.last: false});
 }
 
 class StatusResponseManager {
