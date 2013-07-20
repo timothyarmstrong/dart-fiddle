@@ -201,10 +201,15 @@ void handleApiCall(request) {
             new Status(message: 'Running dart2js...', step: 2, dartiumDone: true), token);
         return new Future.value();
       })
-      .then((_) => Process.run('./dart-sdk/bin/dart2js', ['-o./files/$id/main.dart.js', './files/$id/main.dart']))
       .then((_) {
+        return Process.run('./dart-sdk/bin/dart2js', ['-o./files/$id/main.dart.js', './files/$id/main.dart']);
+      })
+      .then((result) {
+        print("dart2js ran. Result is:\n ${result.stdout}");
         responseManager.addStatus(
             new Status(message: 'Completed', step: 3, dartiumDone: true, last: true), token);
+      }).catchError((_) {
+
       });
   });
 }

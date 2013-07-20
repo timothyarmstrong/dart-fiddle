@@ -167,11 +167,13 @@ header .buttons button:active {
   left: 0;
   right: 0;
   bottom: 0;
-  display: none;
+  z-index: 1;
+  background: white;
 }
 
 #code-panel .editors .editor.active {
   display: block;
+  z-index: 10;
 }
 
 #code-panel .status {

@@ -3,6 +3,9 @@ import 'dart:json' as JSON;
 
 import 'package:js/js.dart' as js;
 
+// Holds whether the browser we're running in is Dartium. Initialized in main().
+bool isDartium;
+
 String getId() {
   var path = window.location.pathname;
   if (path == '/' || path.isEmpty) {
@@ -38,13 +41,18 @@ void statusResponse(HttpRequest request, String token) {
   statusLine.text = data['status'];
   var statusMonitor = query('#result-panel .status-monitor');
   statusMonitor.append(statusLine);
-  if (!data['last']) {
-    sendStatusRequest(token);
-  } else {
+  
+  // If we're at the last step, or this is Dartium, and it's done.
+  if (data['last'] || (isDartium && data['dartium_done'])) {
     statusMonitor.classes.remove('active');
     var iframe = query('#result-panel iframe');
     iframe.src = '/files/${getId()}/';
+  } else {
+    sendStatusRequest(token);
   }
+
+  // TODO: Should we keep sending status requests if we finish early on
+  // dartium_done? Or just clean them up on the server side.
 }
 
 void sendStatusRequest(String token) {
@@ -248,6 +256,15 @@ class Editor {
 
 main() {
   
+  // Check whether this is Dartium.
+  // TODO: Is there a better way to do this? It throws an error if
+  // webkitStartDart doesn't exist, which is why I'm using the try-catch.
+  try {
+    isDartium = js.context.window.navigator.webkitStartDart != null;
+  } on Error {
+    isDartium = false;
+  }
+
   // Grab the initial data from the JavaScript.
   var initialData;
   initialData = JSON.parse(js.context.initialData);
@@ -265,7 +282,7 @@ main() {
 
   // Prepare the 'run' button.
   var runButton = query('#run');
-  runButton.onClick.listen((e) { // TODO: use onClick.listen.
+  runButton.onClick.listen((e) {
     // The data to send.
     var data = {
       'id': getId(),

@@ -31,6 +31,8 @@ class StatusResponseManager {
   var _responses = new Map<String, List>();
   var _statuses = new Map<String, Status>();
 
+  // This function should be called when a request is made and it should hang
+  // until there is a status to send it back with.
   void addResponse(HttpResponse response, String token) {
     // First check if we have a status waiting.
     if (_statuses.containsKey(token)) {
@@ -46,6 +48,7 @@ class StatusResponseManager {
     _responses[token].add(response);
   }
 
+  // This function should be called whenever there is a status update.
   void addStatus(Status status, String token) {
     // First check if we can send the response immediately.
     if (_responses.containsKey(token)) {
@@ -69,7 +72,8 @@ class StatusResponseManager {
       'status': status.message,
       'step': status.step,
       'last': status.last,
-      'token': token
+      'token': token,
+      'dartium_done': status.dartiumDone
     };
     response.headers.set(HttpHeaders.CONTENT_TYPE, 'application/json');
     response.write(JSON.stringify(data));
