@@ -28,7 +28,7 @@ Future<Map<String, String>> getFormDataJsonFromInputStream(Stream input) {
 
   input.listen((data) => buffer.add(new String.fromCharCodes(data)), onDone: () {
     var fullString = buffer.join('');
-    completer.complete(JSON.parse(fullString.slice(fullString.indexOf('{'), fullString.lastIndexOf('}') + 1)));
+    completer.complete(JSON.parse(fullString.substring(fullString.indexOf('{'), fullString.lastIndexOf('}') + 1)));
   });
 
   // TODO: Error handling.
@@ -189,11 +189,9 @@ void handleApiCall(request) {
       if (needToRunPub) {
         responseManager.addStatus(
             new Status(message: 'Running Pub...', step: 1), token);
-        var pubProcessOptions = new ProcessOptions();
-        pubProcessOptions.workingDirectory = './files/$id/';
-        return Process.run('../../dart-sdk/bin/pub', ['install'], pubProcessOptions);
+        return Process.run('../../dart-sdk/bin/pub', ['install'], workingDirectory: './files/$id/');
       }
-      return new Future.immediate(null);
+      return new Future.value();
     }
 
     // TODO: Handle Pub or dart2js errors.
@@ -201,7 +199,7 @@ void handleApiCall(request) {
       .then((_) {
         responseManager.addStatus(
             new Status(message: 'Running dart2js...', step: 2, dartiumDone: true), token);
-        return new Future.immediate(null);
+        return new Future.value();
       })
       .then((_) => Process.run('./dart-sdk/bin/dart2js', ['-o./files/$id/main.dart.js', './files/$id/main.dart']))
       .then((_) {
@@ -474,7 +472,7 @@ main() {
       } else if (request.uri.path.startsWith('/api/status/') &&
                  request.method == 'GET') {
         handleStatusRequest(request);
-      } else if (segments.length == 0 || (segments.length === 1 &&
+      } else if (segments.length == 0 || (segments.length == 1 &&
                  new RegExp(r'^[a-z]{7}$').hasMatch(segments[0]))) {
         // Requests for the application, either the root or including an ID.
         handleAppRequest(request);

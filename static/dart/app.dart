@@ -1,6 +1,5 @@
 import 'dart:html';
 import 'dart:json' as JSON;
-import 'dart:uri' as uri;
 
 import 'package:js/js.dart' as js;
 
@@ -75,13 +74,6 @@ class _Document {
     tabElement.classes.remove('active');
   }
 
-  /*Map<String, String> get contents() {
-    var editorContents;
-    js.scoped(() {
-      //
-    });
-  }*/
-
 }
 
 class Editor {
@@ -147,9 +139,7 @@ class Editor {
     // TODO: Use a better replacement for prompt
     var filename;
     do {
-      js.scoped(() {
-        filename = js.context.prompt('Filename?');
-      });
+      filename = js.context.prompt('Filename?');
     } while (filename == null || _documents.containsKey(filename));
 
     var filetype;
@@ -210,22 +200,16 @@ class Editor {
 
     // Setup ACE.
     var aceProxy;
-    js.scoped(() {
-      aceProxy = js.context.ace.edit(aceElement);
-      //aceProxy.setTheme('ace/theme/espresso');
-      aceProxy.getSession().setMode(_filetypeToMode[filetype]);
-      aceProxy.setShowPrintMargin(false);
-      aceProxy.getSession().setTabSize(2);
-      aceProxy.setHighlightActiveLine(false);
-      aceProxy.setValue(content);
-      aceProxy.clearSelection();
+    aceProxy = js.context.ace.edit(aceElement);
+    //aceProxy.setTheme('ace/theme/espresso');
+    aceProxy.getSession().setMode(_filetypeToMode[filetype]);
+    aceProxy.setShowPrintMargin(false);
+    aceProxy.getSession().setTabSize(2);
+    aceProxy.setHighlightActiveLine(false);
+    aceProxy.setValue(content);
+    aceProxy.clearSelection();
 
-      js.retain(aceProxy);
-    });
-
-    js.scoped(() {
-      //window.alert(aceProxy.getValue());
-    });
+    js.retain(aceProxy);
 
     // Bundle everything up into a _Document.
     var document = new _Document(aceElement, tab, aceProxy, filename, filetype, renamable);
@@ -254,9 +238,7 @@ class Editor {
     _documents.forEach((filename, document) {
       var data = new Map();
       data['filename'] = filename;
-      js.scoped(() {
-        data['content'] = document.aceProxy.getValue();
-      });
+      data['content'] = document.aceProxy.getValue();
       retval.add(data);
     });
     return retval;
@@ -268,9 +250,7 @@ main() {
   
   // Grab the initial data from the JavaScript.
   var initialData;
-  js.scoped(() {
-    initialData = JSON.parse(js.context.initialData);
-  });
+  initialData = JSON.parse(js.context.initialData);
 
   // Create the editors.
   var dartEditor = new Editor(query('#dart-code'), canCreateDocuments: true);
