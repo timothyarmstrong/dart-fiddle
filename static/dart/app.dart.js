@@ -4504,7 +4504,6 @@ main: function() {
       throw exception;
   }
 
-  $.print($.isDartium === true ? "is dartium" : "isnt dartium");
   initialData = $.parse($.context().get$initialData(), null);
   dartEditor = $.Editor$($.query("#dart-code"), true);
   for (t1 = $.getInterceptor$asx(initialData), t2 = $.get$iterator$ax(t1.$index(initialData, "dart")); t2.moveNext$0() === true;) {

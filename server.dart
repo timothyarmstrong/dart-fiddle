@@ -151,9 +151,6 @@ void handleApiCall(request) {
           file.deleteSync();
         }
       }
-
-      //dir.deleteSync(recursive: true);
-      //dir.createSync(recursive: true);
       
     }
 
@@ -205,7 +202,9 @@ void handleApiCall(request) {
         return Process.run('./dart-sdk/bin/dart2js', ['-o./files/$id/main.dart.js', './files/$id/main.dart']);
       })
       .then((result) {
-        print("dart2js ran. Result is:\n ${result.stdout}");
+        if (result.exitCode != 0) {
+          print('Warning: dart2js encountered an error:\n${result.stdout}')
+        }
         responseManager.addStatus(
             new Status(message: 'Completed', step: 3, dartiumDone: true, last: true), token);
       }).catchError((_) {
@@ -235,7 +234,9 @@ void handleAppRequest(request) {
   if (!id.isEmpty) {
     if (!new Directory('./files/$id.').existsSync()) {
       request.response.headers.set(HttpHeaders.LOCATION, '/');
-      //request.response.close();
+      request.response.statusCode = 302;
+      request.response.close();
+      return;
     }
   }
 
